@@ -4,13 +4,6 @@ Motor de ajedrez escrito en Java desde cero.
 
 > Demo para jugar en el navegador: próximamente en davidpomaresp.github.io/ajedrez
 
-## Estado
-
-- [x] Tablero de 64 casillas y lectura/escritura de FEN
-- [x] Generación de jugadas legales con pruebas perft
-- [ ] Búsqueda negamax con poda alfa-beta y evaluación
-- [ ] Compilación a JavaScript con TeaVM y tablero web
-- [ ] Primer experimento medido (nodos, tiempo y partidas)
 
 ## Cómo ejecutar las pruebas
 
