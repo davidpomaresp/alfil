@@ -21,14 +21,21 @@ public final class Game {
         }
     }
 
-    private Board board;
+    private final Board board;
+    private final TranspositionTable table;
 
     public Game() {
         this(Board.START_FEN);
     }
 
     public Game(String fen) {
-        board = Board.fromFen(fen);
+        this(fen, new TranspositionTable(20));
+    }
+
+    /** Games can share a table so what was learned in one search helps the next. */
+    public Game(String fen, TranspositionTable table) {
+        this.board = Board.fromFen(fen);
+        this.table = table;
     }
 
     public Board board() {
@@ -79,6 +86,6 @@ public final class Game {
     }
 
     public SearchResult think(int maxDepth, long millis) {
-        return new Search(board).search(maxDepth, millis);
+        return new Search(board, table).search(maxDepth, millis);
     }
 }

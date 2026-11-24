@@ -55,10 +55,12 @@ public final class Match {
     /** Result from the point of view of {@code first}: 1 win, 0.5 draw, 0 loss. */
     static double playGame(String opening, Player white, Player black, Player first, long millis) {
         Game game = new Game(opening);
+        TranspositionTable whiteTable = new TranspositionTable(20);
+        TranspositionTable blackTable = new TranspositionTable(20);
         int plies = 0;
         while (!game.status().isOver() && plies < MAX_PLIES) {
             Player toMove = game.board().sideToMove() == Piece.WHITE ? white : black;
-            Search search = new Search(game.board());
+            Search search = new Search(game.board(), toMove == white ? whiteTable : blackTable);
             search.setMoveOrdering(toMove.moveOrdering());
             int move = search.search(Search.MAX_PLY - 1, millis).bestMove();
             game.play(Move.toUci(move));

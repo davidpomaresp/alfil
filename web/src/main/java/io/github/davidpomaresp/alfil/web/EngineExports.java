@@ -1,11 +1,13 @@
 package io.github.davidpomaresp.alfil.web;
 
+import io.github.davidpomaresp.alfil.Board;
 import io.github.davidpomaresp.alfil.Game;
 import io.github.davidpomaresp.alfil.Move;
 import io.github.davidpomaresp.alfil.MoveList;
 import io.github.davidpomaresp.alfil.MoveGenerator;
 import io.github.davidpomaresp.alfil.Notation;
 import io.github.davidpomaresp.alfil.SearchResult;
+import io.github.davidpomaresp.alfil.TranspositionTable;
 import org.teavm.jso.JSExport;
 
 /**
@@ -14,7 +16,10 @@ import org.teavm.jso.JSExport;
  */
 public final class EngineExports {
 
-    private static Game game = new Game();
+    // Kept between moves: the worker rebuilds the game for every search, but the
+    // positions it already analysed are still useful.
+    private static final TranspositionTable TABLE = new TranspositionTable(18);
+    private static Game game = new Game(Board.START_FEN, TABLE);
 
     private EngineExports() {
     }
@@ -24,7 +29,7 @@ public final class EngineExports {
 
     @JSExport
     public static void newGame(String fen) {
-        game = fen == null || fen.isEmpty() ? new Game() : new Game(fen);
+        game = new Game(fen == null || fen.isEmpty() ? Board.START_FEN : fen, TABLE);
     }
 
     @JSExport

@@ -7,6 +7,10 @@ package io.github.davidpomaresp.alfil;
  * negated scores of the positions after each move. Alpha-beta skips moves that
  * cannot change the result: alpha is what we are already guaranteed, beta is the
  * most the opponent will allow.
+ *
+ * On top of that, the usual ways to look at fewer positions: a transposition table,
+ * good move ordering (hash move, captures, killers, history), principal variation
+ * search, null-move pruning and late move reductions.
  */
 public final class Search {
 
@@ -14,11 +18,19 @@ public final class Search {
     public static final int MAX_PLY = 128;
     static final int INFINITY = 32000;
 
+    private static final int HASH_MOVE_SCORE = 2_000_000;
+    private static final int CAPTURE_SCORE = 1_000_000;
+    private static final int KILLER_SCORE = 900_000;
+
     private final Board board;
+    private final TranspositionTable table;
+    private final Evaluator evaluator = new Evaluator();
     private final MoveList[] moveLists = new MoveList[MAX_PLY + 1];
-    private final int[][] captureScores = new int[MAX_PLY + 1][256];
+    private final int[][] moveScores = new int[MAX_PLY + 1][256];
     private final int[][] pvTable = new int[MAX_PLY + 1][MAX_PLY + 1];
     private final int[] pvLength = new int[MAX_PLY + 1];
+    private final int[][] killers = new int[MAX_PLY + 1][2];
+    private final int[][] history = new int[64][64];
 
     private boolean moveOrdering = true;
     private long nodes;
@@ -33,7 +45,12 @@ public final class Search {
     }
 
     public Search(Board board) {
+        this(board, new TranspositionTable(20));
+    }
+
+    public Search(Board board, TranspositionTable table) {
         this.board = board;
+        this.table = table;
         for (int i = 0; i < moveLists.length; i++) {
             moveLists[i] = new MoveList();
         }
@@ -64,6 +81,13 @@ public final class Search {
         startTime = System.currentTimeMillis();
         deadline = millis > 0 ? startTime + millis : Long.MAX_VALUE;
         maxDepth = Math.min(Math.max(maxDepth, 1), MAX_PLY - 1);
+        for (int[] k : killers) {
+            k[0] = Move.NONE;
+            k[1] = Move.NONE;
+        }
+        for (int[] h : history) {
+            java.util.Arrays.fill(h, 0);
+        }
 
         MoveList rootMoves = MoveGenerator.legalMoves(board);
         if (rootMoves.size() == 0) {
@@ -72,16 +96,24 @@ public final class Search {
 
         SearchResult best = new SearchResult(rootMoves.get(0), 0, 0, 0, 0, new int[] {rootMoves.get(0)});
         for (int depth = 1; depth <= maxDepth; depth++) {
-            int score = negamax(depth, -INFINITY, INFINITY, 0);
-            if (stopped) {
+            int score = negamax(depth, -INFINITY, INFINITY, 0, true);
+            if (stopped && depth > 1) {
                 break;
             }
-            int[] pv = java.util.Arrays.copyOf(pvTable[0], pvLength[0]);
-            best = new SearchResult(pv[0], score, depth, nodes, System.currentTimeMillis() - startTime, pv);
-            if (listener != null) {
-                listener.onIteration(best);
+            if (pvLength[0] > 0) {
+                int[] pv = java.util.Arrays.copyOf(pvTable[0], pvLength[0]);
+                best = new SearchResult(pv[0], score, depth, nodes, System.currentTimeMillis() - startTime, pv);
+                if (listener != null) {
+                    listener.onIteration(best);
+                }
             }
-            if (Math.abs(score) >= MATE - depth) {
+            if (stopped || Math.abs(score) >= MATE - depth) {
+                break;
+            }
+            // A new depth takes several times longer than the last one; don't start
+            // one we almost certainly can't finish.
+            long elapsed = System.currentTimeMillis() - startTime;
+            if (millis > 0 && elapsed > millis / 2) {
                 break;
             }
         }
@@ -89,50 +121,135 @@ public final class Search {
                 System.currentTimeMillis() - startTime, best.pv());
     }
 
-    private int negamax(int depth, int alpha, int beta, int ply) {
+    private int negamax(int depth, int alpha, int beta, int ply, boolean allowNull) {
         pvLength[ply] = 0;
         if (shouldStop()) {
             return 0;
         }
-        if (ply > 0 && isDraw()) {
+        boolean root = ply == 0;
+        if (!root && isDraw()) {
             return 0;
         }
-        if (depth <= 0 || ply >= MAX_PLY) {
+        if (ply >= MAX_PLY) {
+            return evaluator.score(board);
+        }
+
+        boolean inCheck = board.inCheck();
+        if (inCheck) {
+            depth++;
+        }
+        if (depth <= 0) {
             return quiescence(alpha, beta, ply);
         }
         nodes++;
 
+        boolean pvNode = beta - alpha > 1;
+        long entry = table.probe(board.hash());
+        int hashMove = Move.NONE;
+        if (entry != 0) {
+            hashMove = TranspositionTable.move(entry);
+            if (!pvNode && TranspositionTable.depth(entry) >= depth) {
+                int score = fromTable(TranspositionTable.score(entry), ply);
+                int bound = TranspositionTable.bound(entry);
+                if (bound == TranspositionTable.EXACT
+                        || (bound == TranspositionTable.LOWER && score >= beta)
+                        || (bound == TranspositionTable.UPPER && score <= alpha)) {
+                    return score;
+                }
+            }
+        }
+
+        // Null move: if passing the turn still leaves us above beta, a real move almost
+        // surely does too, so cut without searching. Not in check (passing would be
+        // illegal) and not with only pawns left (zugzwang is common there).
+        int us = board.sideToMove();
+        if (allowNull && !pvNode && !inCheck && depth >= 3 && board.hasNonPawnMaterial(us)
+                && evaluator.score(board) >= beta) {
+            int reduction = 2 + depth / 4;
+            board.makeNullMove();
+            int score = -negamax(depth - 1 - reduction, -beta, -beta + 1, ply + 1, false);
+            board.unmakeNullMove();
+            if (stopped) {
+                return 0;
+            }
+            if (score >= beta && score < MATE - MAX_PLY) {
+                return beta;
+            }
+        }
+
         MoveList moves = moveLists[ply];
-        MoveGenerator.generateLegal(board, moves);
-        if (moves.size() == 0) {
-            // Prefer the quickest mate and the slowest loss.
-            return board.inCheck() ? -MATE + ply : 0;
-        }
-
+        MoveGenerator.generatePseudoLegal(board, moves);
+        int[] scores = moveScores[ply];
         if (moveOrdering) {
-            sortCapturesFirst(moves, captureScores[ply]);
+            scoreMoves(moves, scores, hashMove, ply);
         }
 
+        int originalAlpha = alpha;
         int bestScore = -INFINITY;
+        int bestMove = Move.NONE;
+        int legal = 0;
         for (int i = 0; i < moves.size(); i++) {
+            if (moveOrdering) {
+                pickBest(moves, scores, i);
+            }
             int move = moves.get(i);
             board.makeMove(move);
-            int score = -negamax(depth - 1, -beta, -alpha, ply + 1);
+            if (board.isAttacked(board.kingSquare(us), us ^ 1)) {
+                board.unmakeMove(move);
+                continue;
+            }
+            legal++;
+            boolean quiet = !Move.isCapture(move) && !Move.isPromotion(move);
+
+            int score;
+            if (legal == 1) {
+                score = -negamax(depth - 1, -beta, -alpha, ply + 1, true);
+            } else {
+                // Late move reductions: quiet moves late in a well-ordered list are
+                // rarely best, so search them shallower first and only fully if they surprise us.
+                int reduction = 0;
+                if (moveOrdering && depth >= 3 && legal > 3 && quiet && !inCheck && !board.inCheck()) {
+                    reduction = legal > 8 ? 2 : 1;
+                }
+                // Principal variation search: prove the move is worse with a null window.
+                score = -negamax(depth - 1 - reduction, -alpha - 1, -alpha, ply + 1, true);
+                if (score > alpha && reduction > 0) {
+                    score = -negamax(depth - 1, -alpha - 1, -alpha, ply + 1, true);
+                }
+                if (score > alpha && score < beta) {
+                    score = -negamax(depth - 1, -beta, -alpha, ply + 1, true);
+                }
+            }
             board.unmakeMove(move);
             if (stopped) {
                 return 0;
             }
+
             if (score > bestScore) {
                 bestScore = score;
+                bestMove = move;
                 if (score > alpha) {
                     alpha = score;
                     updatePv(ply, move);
                     if (alpha >= beta) {
+                        if (quiet) {
+                            rememberQuietCutoff(move, depth, ply);
+                        }
                         break;
                     }
                 }
             }
         }
+
+        if (legal == 0) {
+            // Prefer the quickest mate and the slowest loss.
+            return inCheck ? -MATE + ply : 0;
+        }
+
+        int bound = bestScore >= beta ? TranspositionTable.LOWER
+                : bestScore > originalAlpha ? TranspositionTable.EXACT
+                : TranspositionTable.UPPER;
+        table.store(board.hash(), bestMove, toTable(bestScore, ply), depth, bound);
         return bestScore;
     }
 
@@ -142,14 +259,12 @@ public final class Search {
      */
     private int quiescence(int alpha, int beta, int ply) {
         nodes++;
+        pvLength[ply] = 0;
         if (shouldStop()) {
             return 0;
         }
-        int standPat = Evaluator.evaluate(board);
-        if (ply >= MAX_PLY) {
-            return standPat;
-        }
-        if (standPat >= beta) {
+        int standPat = evaluator.score(board);
+        if (ply >= MAX_PLY || standPat >= beta) {
             return standPat;
         }
         if (standPat > alpha) {
@@ -157,12 +272,22 @@ public final class Search {
         }
 
         MoveList moves = moveLists[ply];
-        MoveGenerator.generateLegal(board, moves);
-        int count = keepCapturesInOrder(moves, captureScores[ply]);
+        MoveGenerator.generateCaptures(board, moves);
+        int[] scores = moveScores[ply];
+        for (int i = 0; i < moves.size(); i++) {
+            scores[i] = captureScore(moves.get(i));
+        }
+
+        int us = board.sideToMove();
         int bestScore = standPat;
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < moves.size(); i++) {
+            pickBest(moves, scores, i);
             int move = moves.get(i);
             board.makeMove(move);
+            if (board.isAttacked(board.kingSquare(us), us ^ 1)) {
+                board.unmakeMove(move);
+                continue;
+            }
             int score = -quiescence(-beta, -alpha, ply + 1);
             board.unmakeMove(move);
             if (stopped) {
@@ -182,48 +307,52 @@ public final class Search {
     }
 
     /**
-     * Keeps only captures and promotions, most valuable victim first and, among equal
-     * victims, least valuable attacker first ("MVV-LVA"). Without this the quiescence
-     * search can explode in positions with many possible captures.
+     * Order: the move the transposition table remembers, then captures by MVV-LVA
+     * (most valuable victim, least valuable attacker), then killer moves, then
+     * quiet moves by how often they caused cutoffs before (history).
      */
-    private int keepCapturesInOrder(MoveList moves, int[] scores) {
-        int count = 0;
+    private void scoreMoves(MoveList moves, int[] scores, int hashMove, int ply) {
         for (int i = 0; i < moves.size(); i++) {
             int move = moves.get(i);
-            if (Move.isCapture(move) || Move.isPromotion(move)) {
-                moves.set(count, move);
-                scores[count++] = captureScore(move);
+            if (move == hashMove) {
+                scores[i] = HASH_MOVE_SCORE;
+            } else if (Move.isCapture(move) || Move.isPromotion(move)) {
+                scores[i] = CAPTURE_SCORE + captureScore(move);
+            } else if (move == killers[ply][0]) {
+                scores[i] = KILLER_SCORE;
+            } else if (move == killers[ply][1]) {
+                scores[i] = KILLER_SCORE - 1;
+            } else {
+                scores[i] = history[Move.from(move)][Move.to(move)];
             }
         }
-        sort(moves, scores, count);
-        return count;
     }
 
-    /**
-     * Tries captures first (MVV-LVA), then quiet moves. Good moves first means alpha
-     * rises early, so later moves get cut off sooner.
-     */
-    private void sortCapturesFirst(MoveList moves, int[] scores) {
-        for (int i = 0; i < moves.size(); i++) {
-            int move = moves.get(i);
-            scores[i] = Move.isCapture(move) || Move.isPromotion(move) ? 100_000 + captureScore(move) : 0;
-        }
-        sort(moves, scores, moves.size());
-    }
-
-    private static void sort(MoveList moves, int[] scores, int count) {
-        for (int i = 1; i < count; i++) {
-            int move = moves.get(i);
-            int score = scores[i];
-            int j = i - 1;
-            while (j >= 0 && scores[j] < score) {
-                moves.set(j + 1, moves.get(j));
-                scores[j + 1] = scores[j];
-                j--;
+    /** Swaps the highest-scored remaining move into position {@code index}. */
+    private static void pickBest(MoveList moves, int[] scores, int index) {
+        int best = index;
+        for (int i = index + 1; i < moves.size(); i++) {
+            if (scores[i] > scores[best]) {
+                best = i;
             }
-            moves.set(j + 1, move);
-            scores[j + 1] = score;
         }
+        if (best != index) {
+            int move = moves.get(index);
+            moves.set(index, moves.get(best));
+            moves.set(best, move);
+            int score = scores[index];
+            scores[index] = scores[best];
+            scores[best] = score;
+        }
+    }
+
+    private void rememberQuietCutoff(int move, int depth, int ply) {
+        if (killers[ply][0] != move) {
+            killers[ply][1] = killers[ply][0];
+            killers[ply][0] = move;
+        }
+        int[] row = history[Move.from(move)];
+        row[Move.to(move)] = Math.min(row[Move.to(move)] + depth * depth, KILLER_SCORE - 2);
     }
 
     private int captureScore(int move) {
@@ -232,6 +361,28 @@ public final class Search {
                 : Piece.type(board.pieceAt(Move.to(move)));
         int attacker = Piece.type(board.pieceAt(Move.from(move)));
         return Evaluator.VALUE[victim] * 10 - attacker + Evaluator.VALUE[Move.promotionType(move)];
+    }
+
+    // Mate scores are stored relative to the node, not the root, so they stay correct
+    // when the same position is reached at a different ply.
+    private static int toTable(int score, int ply) {
+        if (score >= MATE - MAX_PLY) {
+            return score + ply;
+        }
+        if (score <= -MATE + MAX_PLY) {
+            return score - ply;
+        }
+        return score;
+    }
+
+    private static int fromTable(int score, int ply) {
+        if (score >= MATE - MAX_PLY) {
+            return score - ply;
+        }
+        if (score <= -MATE + MAX_PLY) {
+            return score + ply;
+        }
+        return score;
     }
 
     private boolean isDraw() {
