@@ -268,6 +268,43 @@ public final class Board {
         sideToMove = us ^ 1;
     }
 
+    /** Passes the turn without moving. Only used by the search (null-move pruning). */
+    public void makeNullMove() {
+        undoCaptured[ply] = Piece.EMPTY;
+        undoCastling[ply] = castlingRights;
+        undoEnPassant[ply] = enPassantSquare;
+        undoHalfmove[ply] = halfmoveClock;
+        hashHistory[ply] = hash;
+        ply++;
+        if (enPassantSquare != Square.NONE) {
+            hash ^= Zobrist.EN_PASSANT_FILE[Square.file(enPassantSquare)];
+            enPassantSquare = Square.NONE;
+        }
+        hash ^= Zobrist.BLACK_TO_MOVE;
+        halfmoveClock++;
+        sideToMove ^= 1;
+    }
+
+    public void unmakeNullMove() {
+        sideToMove ^= 1;
+        ply--;
+        enPassantSquare = undoEnPassant[ply];
+        halfmoveClock = undoHalfmove[ply];
+        hash = hashHistory[ply];
+    }
+
+    /** True if the side to move has something other than king and pawns. */
+    public boolean hasNonPawnMaterial(int color) {
+        for (int sq = 0; sq < 64; sq++) {
+            int piece = squares[sq];
+            int type = Piece.type(piece);
+            if (piece != Piece.EMPTY && Piece.color(piece) == color && type != Piece.PAWN && type != Piece.KING) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void unmakeMove(int move) {
         int from = Move.from(move);
         int to = Move.to(move);

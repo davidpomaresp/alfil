@@ -34,6 +34,16 @@ public final class MoveGenerator {
     }
 
     public static void generatePseudoLegal(Board board, MoveList out) {
+        generate(board, out, false);
+    }
+
+    /** Captures and promotions only, for the quiescence search. Not checked for legality. */
+    public static void generateCaptures(Board board, MoveList out) {
+        generate(board, out, true);
+    }
+
+    private static void generate(Board board, MoveList out, boolean capturesOnly) {
+        out.clear();
         int us = board.sideToMove();
         for (int sq = 0; sq < 64; sq++) {
             int piece = board.squares[sq];
@@ -41,31 +51,33 @@ public final class MoveGenerator {
                 continue;
             }
             switch (Piece.type(piece)) {
-                case Piece.PAWN -> pawnMoves(board, sq, us, out);
-                case Piece.KNIGHT -> stepMoves(board, sq, us, Attacks.KNIGHT[sq], out);
-                case Piece.BISHOP -> slidingMoves(board, sq, us, 4, 8, out);
-                case Piece.ROOK -> slidingMoves(board, sq, us, 0, 4, out);
-                case Piece.QUEEN -> slidingMoves(board, sq, us, 0, 8, out);
+                case Piece.PAWN -> pawnMoves(board, sq, us, out, capturesOnly);
+                case Piece.KNIGHT -> stepMoves(board, sq, us, Attacks.KNIGHT[sq], out, capturesOnly);
+                case Piece.BISHOP -> slidingMoves(board, sq, us, 4, 8, out, capturesOnly);
+                case Piece.ROOK -> slidingMoves(board, sq, us, 0, 4, out, capturesOnly);
+                case Piece.QUEEN -> slidingMoves(board, sq, us, 0, 8, out, capturesOnly);
                 case Piece.KING -> {
-                    stepMoves(board, sq, us, Attacks.KING[sq], out);
-                    castlingMoves(board, us, out);
+                    stepMoves(board, sq, us, Attacks.KING[sq], out, capturesOnly);
+                    if (!capturesOnly) {
+                        castlingMoves(board, us, out);
+                    }
                 }
                 default -> throw new IllegalStateException("Bad piece " + piece);
             }
         }
     }
 
-    private static void pawnMoves(Board board, int from, int us, MoveList out) {
+    private static void pawnMoves(Board board, int from, int us, MoveList out, boolean capturesOnly) {
         int forward = us == Piece.WHITE ? 8 : -8;
         int startRank = us == Piece.WHITE ? 1 : 6;
         int lastRank = us == Piece.WHITE ? 7 : 0;
         int file = Square.file(from);
 
         int one = from + forward;
-        if (board.squares[one] == Piece.EMPTY) {
+        if (board.squares[one] == Piece.EMPTY && (!capturesOnly || Square.rank(one) == lastRank)) {
             addPawnMove(from, one, false, lastRank, out);
             int two = one + forward;
-            if (Square.rank(from) == startRank && board.squares[two] == Piece.EMPTY) {
+            if (!capturesOnly && Square.rank(from) == startRank && board.squares[two] == Piece.EMPTY) {
                 out.add(Move.of(from, two, Move.DOUBLE_PAWN_PUSH));
             }
         }
@@ -94,10 +106,13 @@ public final class MoveGenerator {
         }
     }
 
-    private static void stepMoves(Board board, int from, int us, int[] targets, MoveList out) {
+    private static void stepMoves(Board board, int from, int us, int[] targets, MoveList out, boolean capturesOnly) {
         for (int to : targets) {
             int target = board.squares[to];
             if (target == Piece.EMPTY) {
+                if (capturesOnly) {
+                    continue;
+                }
                 out.add(Move.of(from, to, Move.QUIET));
             } else if (Piece.color(target) != us) {
                 out.add(Move.of(from, to, Move.CAPTURE));
@@ -105,12 +120,15 @@ public final class MoveGenerator {
         }
     }
 
-    private static void slidingMoves(Board board, int from, int us, int firstDir, int lastDir, MoveList out) {
+    private static void slidingMoves(Board board, int from, int us, int firstDir, int lastDir, MoveList out,
+                                     boolean capturesOnly) {
         for (int d = firstDir; d < lastDir; d++) {
             for (int to : Attacks.RAYS[from][d]) {
                 int target = board.squares[to];
                 if (target == Piece.EMPTY) {
-                    out.add(Move.of(from, to, Move.QUIET));
+                    if (!capturesOnly) {
+                        out.add(Move.of(from, to, Move.QUIET));
+                    }
                     continue;
                 }
                 if (Piece.color(target) != us) {
