@@ -4,6 +4,7 @@ import io.github.davidpomaresp.alfil.Game;
 import io.github.davidpomaresp.alfil.Move;
 import io.github.davidpomaresp.alfil.MoveList;
 import io.github.davidpomaresp.alfil.MoveGenerator;
+import io.github.davidpomaresp.alfil.Notation;
 import io.github.davidpomaresp.alfil.SearchResult;
 import org.teavm.jso.JSExport;
 
@@ -48,6 +49,13 @@ public final class EngineExports {
     @JSExport
     public static boolean play(String uci) {
         return game.play(uci);
+    }
+
+    /** The move in algebraic notation ("Nf3"), or an empty string if it is not legal. */
+    @JSExport
+    public static String san(String uci) {
+        int move = game.findMove(uci);
+        return move == Move.NONE ? "" : Notation.toSan(game.board(), move);
     }
 
     @JSExport
