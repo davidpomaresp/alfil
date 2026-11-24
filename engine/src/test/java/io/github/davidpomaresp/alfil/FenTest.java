@@ -71,6 +71,13 @@ class FenTest {
     }
 
     @Test
+    void remembersWhereTheKingsAre() {
+        Board board = Board.startPosition();
+        assertEquals(Square.parse("e1"), board.kingSquare(WHITE));
+        assertEquals(Square.parse("e8"), board.kingSquare(BLACK));
+    }
+
+    @Test
     void noCastlingRights() {
         Board board = Board.fromFen("4k3/8/8/8/8/8/8/4K3 w - - 0 1");
         assertEquals(0, board.castlingRights());
@@ -103,6 +110,8 @@ class FenTest {
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR x KQkq - 0 1",
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkz - 0 1",
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq e9 0 1",
+            "rnbq1bnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQ - 0 1",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBKKBNR w kq - 0 1",
     })
     void rejectsBrokenFen(String fen) {
         assertThrows(IllegalArgumentException.class, () -> Board.fromFen(fen));

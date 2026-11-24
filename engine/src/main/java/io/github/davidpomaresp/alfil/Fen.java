@@ -22,6 +22,7 @@ public final class Fen {
         board.enPassantSquare = fields[3].equals("-") ? Square.NONE : Square.parse(fields[3]);
         board.halfmoveClock = fields.length > 4 ? parseNumber(fields[4], 0) : 0;
         board.fullmoveNumber = fields.length > 5 ? parseNumber(fields[5], 1) : 1;
+        findKings(board);
         return board;
     }
 
@@ -47,6 +48,23 @@ public final class Fen {
             if (file != 8) {
                 throw new IllegalArgumentException("Rank must cover 8 squares: " + ranks[i]);
             }
+        }
+    }
+
+    private static void findKings(Board board) {
+        for (int sq = 0; sq < 64; sq++) {
+            int piece = board.squares[sq];
+            if (Piece.type(piece) != Piece.KING) {
+                continue;
+            }
+            int color = Piece.color(piece);
+            if (board.kingSquare[color] != Square.NONE) {
+                throw new IllegalArgumentException("More than one king per side");
+            }
+            board.kingSquare[color] = sq;
+        }
+        if (board.kingSquare[Piece.WHITE] == Square.NONE || board.kingSquare[Piece.BLACK] == Square.NONE) {
+            throw new IllegalArgumentException("Each side needs a king");
         }
     }
 
