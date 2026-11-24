@@ -20,6 +20,7 @@ public final class Search {
     private final int[][] pvTable = new int[MAX_PLY + 1][MAX_PLY + 1];
     private final int[] pvLength = new int[MAX_PLY + 1];
 
+    private boolean moveOrdering = true;
     private long nodes;
     private long startTime;
     private long deadline;
@@ -40,6 +41,11 @@ public final class Search {
 
     public void setListener(SearchListener listener) {
         this.listener = listener;
+    }
+
+    /** Turns move ordering in the main search on or off, to measure what it is worth. */
+    public void setMoveOrdering(boolean enabled) {
+        this.moveOrdering = enabled;
     }
 
     /** Asks a running search to stop as soon as possible (e.g. from another thread). */
@@ -101,6 +107,10 @@ public final class Search {
         if (moves.size() == 0) {
             // Prefer the quickest mate and the slowest loss.
             return board.inCheck() ? -MATE + ply : 0;
+        }
+
+        if (moveOrdering) {
+            sortCapturesFirst(moves, captureScores[ply]);
         }
 
         int bestScore = -INFINITY;
@@ -185,6 +195,23 @@ public final class Search {
                 scores[count++] = captureScore(move);
             }
         }
+        sort(moves, scores, count);
+        return count;
+    }
+
+    /**
+     * Tries captures first (MVV-LVA), then quiet moves. Good moves first means alpha
+     * rises early, so later moves get cut off sooner.
+     */
+    private void sortCapturesFirst(MoveList moves, int[] scores) {
+        for (int i = 0; i < moves.size(); i++) {
+            int move = moves.get(i);
+            scores[i] = Move.isCapture(move) || Move.isPromotion(move) ? 100_000 + captureScore(move) : 0;
+        }
+        sort(moves, scores, moves.size());
+    }
+
+    private static void sort(MoveList moves, int[] scores, int count) {
         for (int i = 1; i < count; i++) {
             int move = moves.get(i);
             int score = scores[i];
@@ -197,7 +224,6 @@ public final class Search {
             moves.set(j + 1, move);
             scores[j + 1] = score;
         }
-        return count;
     }
 
     private int captureScore(int move) {

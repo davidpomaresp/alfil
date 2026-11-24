@@ -5,7 +5,7 @@ package io.github.davidpomaresp.alfil;
  * Same depth, same positions: if a change lowers the node count, the search got
  * more efficient; if the best moves change, the change also affected the result.
  *
- * Usage: java -cp engine/target/classes io.github.davidpomaresp.alfil.Bench [depth]
+ * Usage: java -cp engine/target/classes io.github.davidpomaresp.alfil.Bench [depth] [--no-ordering]
  */
 public final class Bench {
 
@@ -25,10 +25,13 @@ public final class Bench {
 
     public static void main(String[] args) {
         int depth = args.length > 0 ? Integer.parseInt(args[0]) : 5;
+        boolean ordering = !(args.length > 1 && args[1].equals("--no-ordering"));
         long totalNodes = 0;
         long totalMillis = 0;
         for (String fen : POSITIONS) {
-            SearchResult r = new Search(Board.fromFen(fen)).search(depth, 0);
+            Search search = new Search(Board.fromFen(fen));
+            search.setMoveOrdering(ordering);
+            SearchResult r = search.search(depth, 0);
             totalNodes += r.nodes();
             totalMillis += r.millis();
             System.out.printf("%-8s %6d cp %12d nodes %7d ms  %s%n",
