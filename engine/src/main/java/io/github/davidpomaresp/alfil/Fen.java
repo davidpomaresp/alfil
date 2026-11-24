@@ -23,6 +23,7 @@ public final class Fen {
         board.halfmoveClock = fields.length > 4 ? parseNumber(fields[4], 0) : 0;
         board.fullmoveNumber = fields.length > 5 ? parseNumber(fields[5], 1) : 1;
         findKings(board);
+        board.hash = Zobrist.hash(board);
         return board;
     }
 

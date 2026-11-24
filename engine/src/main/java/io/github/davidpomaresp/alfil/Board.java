@@ -25,7 +25,9 @@ public final class Board {
     private final int[] undoCastling = new int[MAX_PLY];
     private final int[] undoEnPassant = new int[MAX_PLY];
     private final int[] undoHalfmove = new int[MAX_PLY];
+    private final long[] hashHistory = new long[MAX_PLY];
     private int ply;
+    long hash;
 
     // Castling rights survive a move only if neither square is listed here.
     private static final int[] CASTLING_MASK = new int[64];
@@ -85,6 +87,63 @@ public final class Board {
 
     public int fullmoveNumber() {
         return fullmoveNumber;
+    }
+
+    public long hash() {
+        return hash;
+    }
+
+    /**
+     * True if the current position already happened earlier. Only positions since the
+     * last capture or pawn move can repeat, and only with the same side to move.
+     */
+    public boolean isRepetition() {
+        int stop = Math.max(0, ply - halfmoveClock);
+        for (int i = ply - 2; i >= stop; i -= 2) {
+            if (hashHistory[i] == hash) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Number of earlier occurrences of the current position. */
+    public int repetitionCount() {
+        int count = 0;
+        int stop = Math.max(0, ply - halfmoveClock);
+        for (int i = ply - 2; i >= stop; i -= 2) {
+            if (hashHistory[i] == hash) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** Neither side can possibly mate: K v K, K+minor v K, or K+B v K+B with same-coloured bishops. */
+    public boolean isInsufficientMaterial() {
+        int minors = 0;
+        int bishopSquareColors = 0;
+        int bishops = 0;
+        for (int sq = 0; sq < 64; sq++) {
+            int type = Piece.type(squares[sq]);
+            switch (type) {
+                case Piece.EMPTY, Piece.KING -> {
+                }
+                case Piece.KNIGHT -> minors++;
+                case Piece.BISHOP -> {
+                    minors++;
+                    bishops++;
+                    bishopSquareColors |= 1 << ((Square.file(sq) + Square.rank(sq)) & 1);
+                }
+                default -> {
+                    return false;
+                }
+            }
+        }
+        if (minors <= 1) {
+            return true;
+        }
+        return minors == bishops && bishopSquareColors != 3;
     }
 
     public int kingSquare(int color) {
@@ -152,27 +211,43 @@ public final class Board {
         undoCastling[ply] = castlingRights;
         undoEnPassant[ply] = enPassantSquare;
         undoHalfmove[ply] = halfmoveClock;
+        hashHistory[ply] = hash;
+
+        long h = hash ^ Zobrist.CASTLING[castlingRights] ^ Zobrist.BLACK_TO_MOVE;
+        if (enPassantSquare != Square.NONE) {
+            h ^= Zobrist.EN_PASSANT_FILE[Square.file(enPassantSquare)];
+        }
 
         int captured;
         if (flags == Move.EN_PASSANT) {
             int capturedSquare = to + (us == Piece.WHITE ? -8 : 8);
             captured = squares[capturedSquare];
             squares[capturedSquare] = Piece.EMPTY;
+            h ^= Zobrist.PIECE[captured][capturedSquare];
         } else {
             captured = squares[to];
+            if (captured != Piece.EMPTY) {
+                h ^= Zobrist.PIECE[captured][to];
+            }
         }
         undoCaptured[ply] = captured;
         ply++;
 
-        squares[to] = Move.isPromotion(move) ? Piece.of(us, Move.promotionType(move)) : piece;
+        int placed = Move.isPromotion(move) ? Piece.of(us, Move.promotionType(move)) : piece;
+        squares[to] = placed;
         squares[from] = Piece.EMPTY;
+        h ^= Zobrist.PIECE[piece][from] ^ Zobrist.PIECE[placed][to];
 
         if (flags == Move.KING_CASTLE) {
-            squares[to - 1] = squares[to + 1];
+            int rook = squares[to + 1];
+            squares[to - 1] = rook;
             squares[to + 1] = Piece.EMPTY;
+            h ^= Zobrist.PIECE[rook][to + 1] ^ Zobrist.PIECE[rook][to - 1];
         } else if (flags == Move.QUEEN_CASTLE) {
-            squares[to + 1] = squares[to - 2];
+            int rook = squares[to - 2];
+            squares[to + 1] = rook;
             squares[to - 2] = Piece.EMPTY;
+            h ^= Zobrist.PIECE[rook][to - 2] ^ Zobrist.PIECE[rook][to + 1];
         }
 
         if (Piece.type(piece) == Piece.KING) {
@@ -181,6 +256,11 @@ public final class Board {
 
         enPassantSquare = flags == Move.DOUBLE_PAWN_PUSH ? (from + to) / 2 : Square.NONE;
         castlingRights &= CASTLING_MASK[from] & CASTLING_MASK[to];
+        h ^= Zobrist.CASTLING[castlingRights];
+        if (enPassantSquare != Square.NONE) {
+            h ^= Zobrist.EN_PASSANT_FILE[Square.file(enPassantSquare)];
+        }
+        hash = h;
         halfmoveClock = (Piece.type(piece) == Piece.PAWN || captured != Piece.EMPTY) ? 0 : halfmoveClock + 1;
         if (us == Piece.BLACK) {
             fullmoveNumber++;
@@ -203,6 +283,7 @@ public final class Board {
         castlingRights = undoCastling[ply];
         enPassantSquare = undoEnPassant[ply];
         halfmoveClock = undoHalfmove[ply];
+        hash = hashHistory[ply];
 
         int piece = Move.isPromotion(move) ? Piece.of(us, Piece.PAWN) : squares[to];
         squares[from] = piece;
