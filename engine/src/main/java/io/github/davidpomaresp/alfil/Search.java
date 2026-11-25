@@ -25,6 +25,7 @@ public final class Search {
     private final Board board;
     private final TranspositionTable table;
     private final Evaluator evaluator = new Evaluator();
+    private final See see = new See();
     private final MoveList[] moveLists = new MoveList[MAX_PLY + 1];
     private final int[][] moveScores = new int[MAX_PLY + 1][256];
     private final int[][] pvTable = new int[MAX_PLY + 1][MAX_PLY + 1];
@@ -291,6 +292,10 @@ public final class Search {
         for (int i = 0; i < moves.size(); i++) {
             pickBest(moves, scores, i);
             int move = moves.get(i);
+            // Skip captures that lose material once the exchange is played out.
+            if (!Move.isPromotion(move) && see.evaluate(board, move) < 0) {
+                continue;
+            }
             board.makeMove(move);
             if (board.isAttacked(board.kingSquare(us), us ^ 1)) {
                 board.unmakeMove(move);
