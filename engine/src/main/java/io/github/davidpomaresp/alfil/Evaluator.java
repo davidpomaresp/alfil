@@ -10,61 +10,63 @@ package io.github.davidpomaresp.alfil;
  */
 public final class Evaluator {
 
+    /** Plain piece values, used to order captures. The evaluation uses its own (tunable) ones. */
     static final int[] VALUE = {0, 100, 320, 330, 500, 900, 0};
 
     // How much each piece counts towards "middlegame-ness": 24 at the start, 0 with only pawns.
     private static final int[] PHASE = {0, 0, 1, 1, 2, 4, 0};
-    private static final int MAX_PHASE = 24;
-    private static final int BISHOP_PAIR = 30;
-
-    // Passed pawn bonus by rank (from the pawn's own side), middlegame and endgame.
-    private static final int[] PASSED_MG = {0, 5, 10, 15, 25, 40, 60, 0};
-    private static final int[] PASSED_EG = {0, 10, 15, 25, 45, 70, 110, 0};
-    private static final int DOUBLED_MG = -10;
-    private static final int DOUBLED_EG = -20;
-    private static final int ISOLATED_MG = -10;
-    private static final int ISOLATED_EG = -15;
-    private static final int ROOK_OPEN_FILE = 20;
-    private static final int ROOK_SEMI_OPEN_FILE = 10;
-    private static final int KING_SHIELD_PAWN = 12;
-    // Points per reachable square, middlegame and endgame, for N, B, R, Q.
-    private static final int[] MOBILITY_MG = {0, 0, 4, 5, 2, 1, 0};
-    private static final int[] MOBILITY_EG = {0, 0, 4, 5, 4, 2, 0};
-    // Typical number of reachable squares, so an average piece scores about 0.
+    static final int MAX_PHASE = 24;
+    // Typical number of reachable squares, so an average piece gets about 0 for mobility.
     private static final int[] MOBILITY_BASE = {0, 0, 4, 6, 6, 12, 0};
 
-    // [type][square] for white; black uses the mirrored square.
-    static final int[][] MIDGAME = new int[7][64];
-    static final int[][] ENDGAME = new int[7][64];
+    private static int[] w = EvalParams.defaults();
+    // Material plus square bonus, [type][square] from white's side; black mirrors the square.
+    private static final int[][] MIDGAME = new int[7][64];
+    private static final int[][] ENDGAME = new int[7][64];
 
     static {
-        int[] pawnEndgame = {0, 0, 5, 10, 20, 35, 60, 0};
+        rebuildTables();
+    }
+
+    /** Replaces the weights (used by the tuner) and recomputes the square tables. */
+    static void setWeights(int[] weights) {
+        w = weights.clone();
+        rebuildTables();
+    }
+
+    static int[] weights() {
+        return w.clone();
+    }
+
+    private static void rebuildTables() {
         for (int sq = 0; sq < 64; sq++) {
             int file = Square.file(sq);
             int rank = Square.rank(sq);
             int ring = centerRing(sq);
-
             boolean centralFile = file == 3 || file == 4;
-            MIDGAME[Piece.PAWN][sq] = (rank - 1) * 3 + (centralFile && rank >= 3 ? 15 : 0);
-            ENDGAME[Piece.PAWN][sq] = pawnEndgame[rank];
 
-            int knight = new int[] {20, 10, 0, -25}[ring];
-            MIDGAME[Piece.KNIGHT][sq] = knight;
-            ENDGAME[Piece.KNIGHT][sq] = knight;
+            for (int type = Piece.PAWN; type <= Piece.KING; type++) {
+                int material = type == Piece.KING ? 0 : w[EvalParams.MATERIAL_MG + type - 1];
+                MIDGAME[type][sq] = material;
+                ENDGAME[type][sq] = type == Piece.KING ? 0 : w[EvalParams.MATERIAL_EG + type - 1];
+            }
 
-            int bishop = new int[] {10, 8, 0, -10}[ring];
-            MIDGAME[Piece.BISHOP][sq] = bishop;
-            ENDGAME[Piece.BISHOP][sq] = bishop;
-
-            MIDGAME[Piece.ROOK][sq] = (rank == 6 ? 15 : 0) + (centralFile ? 5 : 0);
-            ENDGAME[Piece.ROOK][sq] = rank == 6 ? 10 : 0;
-
-            int queen = new int[] {5, 3, 0, -5}[ring];
-            MIDGAME[Piece.QUEEN][sq] = queen;
-            ENDGAME[Piece.QUEEN][sq] = queen;
-
-            MIDGAME[Piece.KING][sq] = rank == 0 ? new int[] {15, 20, 10, 0, -5, 0, 25, 15}[file] : -20 * rank;
-            ENDGAME[Piece.KING][sq] = new int[] {25, 12, 0, -20}[ring];
+            if (rank >= 1 && rank <= 6) {
+                MIDGAME[Piece.PAWN][sq] += (rank - 1) * w[EvalParams.PAWN_ADVANCE_MG]
+                        + (centralFile && rank >= 3 ? w[EvalParams.PAWN_CENTER_MG] : 0);
+                ENDGAME[Piece.PAWN][sq] += w[EvalParams.PAWN_RANK_EG + rank - 1];
+            }
+            MIDGAME[Piece.KNIGHT][sq] += w[EvalParams.KNIGHT_RING + ring];
+            ENDGAME[Piece.KNIGHT][sq] += w[EvalParams.KNIGHT_RING + ring];
+            MIDGAME[Piece.BISHOP][sq] += w[EvalParams.BISHOP_RING + ring];
+            ENDGAME[Piece.BISHOP][sq] += w[EvalParams.BISHOP_RING + ring];
+            MIDGAME[Piece.ROOK][sq] += (rank == 6 ? w[EvalParams.ROOK_SEVENTH_MG] : 0)
+                    + (centralFile ? w[EvalParams.ROOK_CENTER_FILE_MG] : 0);
+            ENDGAME[Piece.ROOK][sq] += rank == 6 ? w[EvalParams.ROOK_SEVENTH_EG] : 0;
+            MIDGAME[Piece.QUEEN][sq] += w[EvalParams.QUEEN_RING + ring];
+            ENDGAME[Piece.QUEEN][sq] += w[EvalParams.QUEEN_RING + ring];
+            MIDGAME[Piece.KING][sq] += rank == 0 ? w[EvalParams.KING_FILE_MG + file] : w[EvalParams.KING_RANK_MG] * rank;
+            ENDGAME[Piece.KING][sq] += w[EvalParams.KING_RING_EG + ring];
         }
     }
 
@@ -112,8 +114,8 @@ public final class Evaluator {
             int color = Piece.color(piece);
             int relative = color == Piece.WHITE ? sq : sq ^ 56;
             phase += PHASE[type];
-            mg[color] += VALUE[type] + MIDGAME[type][relative];
-            eg[color] += VALUE[type] + ENDGAME[type][relative];
+            mg[color] += MIDGAME[type][relative];
+            eg[color] += ENDGAME[type][relative];
             if (type == Piece.BISHOP) {
                 bishops[color]++;
             } else if (type == Piece.PAWN) {
@@ -144,19 +146,19 @@ public final class Evaluator {
                 continue;
             }
             int mobility = mobility(squares, sq, type, color) - MOBILITY_BASE[type];
-            mg[color] += mobility * MOBILITY_MG[type];
-            eg[color] += mobility * MOBILITY_EG[type];
+            mg[color] += mobility * w[EvalParams.MOBILITY_MG + type - Piece.KNIGHT];
+            eg[color] += mobility * w[EvalParams.MOBILITY_EG + type - Piece.KNIGHT];
             if (type == Piece.ROOK && pawnsOnFile[color][f] == 0) {
-                int bonus = pawnsOnFile[them][f] == 0 ? ROOK_OPEN_FILE : ROOK_SEMI_OPEN_FILE;
-                mg[color] += bonus;
-                eg[color] += bonus / 2;
+                boolean open = pawnsOnFile[them][f] == 0;
+                mg[color] += w[open ? EvalParams.ROOK_OPEN_MG : EvalParams.ROOK_SEMI_OPEN_MG];
+                eg[color] += w[open ? EvalParams.ROOK_OPEN_EG : EvalParams.ROOK_SEMI_OPEN_EG];
             }
         }
 
         for (int color = 0; color < 2; color++) {
             if (bishops[color] >= 2) {
-                mg[color] += BISHOP_PAIR;
-                eg[color] += BISHOP_PAIR;
+                mg[color] += w[EvalParams.BISHOP_PAIR_MG];
+                eg[color] += w[EvalParams.BISHOP_PAIR_EG];
             }
             mg[color] += kingShield(squares, board.kingSquare(color), color);
         }
@@ -177,13 +179,13 @@ public final class Evaluator {
 
         boolean isolated = (f == 0 || pawnsOnFile[color][f - 1] == 0) && (f == 7 || pawnsOnFile[color][f + 1] == 0);
         if (isolated) {
-            mg[color] += ISOLATED_MG;
-            eg[color] += ISOLATED_EG;
+            mg[color] += w[EvalParams.ISOLATED_MG];
+            eg[color] += w[EvalParams.ISOLATED_EG];
         }
         // Count doubling once, on the rear pawn of the file.
         if (pawnsOnFile[color][f] > 1 && r == rearmost[color][f]) {
-            mg[color] += DOUBLED_MG;
-            eg[color] += DOUBLED_EG;
+            mg[color] += w[EvalParams.DOUBLED_MG];
+            eg[color] += w[EvalParams.DOUBLED_EG];
         }
 
         // Passed: no enemy pawn in front of it on its own or the neighbouring files.
@@ -199,8 +201,8 @@ public final class Evaluator {
         }
         // Only the front pawn of a doubled pair counts as passed.
         if (passed && r == frontmost[color][f]) {
-            mg[color] += PASSED_MG[relativeRank];
-            eg[color] += PASSED_EG[relativeRank];
+            mg[color] += w[EvalParams.PASSED_MG + relativeRank - 1];
+            eg[color] += w[EvalParams.PASSED_EG + relativeRank - 1];
         }
     }
 
@@ -248,9 +250,9 @@ public final class Evaluator {
         for (int f = Math.max(0, file - 1); f <= Math.min(7, file + 1); f++) {
             int front = Square.of(f, rank) + forward;
             if (squares[front] == pawn) {
-                bonus += KING_SHIELD_PAWN;
+                bonus += w[EvalParams.KING_SHIELD_MG];
             } else if (squares[front + forward] == pawn) {
-                bonus += KING_SHIELD_PAWN / 2;
+                bonus += w[EvalParams.KING_SHIELD_MG] / 2;
             }
         }
         return bonus;
