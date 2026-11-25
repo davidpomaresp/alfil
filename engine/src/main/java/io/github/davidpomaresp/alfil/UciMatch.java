@@ -120,7 +120,7 @@ public final class UciMatch {
 
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         List<Future<Double>> results = new ArrayList<>();
-        for (String opening : Match.OPENINGS) {
+        for (String opening : Match.ALL_OPENINGS) {
             results.add(pool.submit(() -> playGame(opening, cmdA, optsA, cmdB, optsB, true, base, inc)));
             results.add(pool.submit(() -> playGame(opening, cmdA, optsA, cmdB, optsB, false, base, inc)));
         }

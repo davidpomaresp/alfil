@@ -43,6 +43,52 @@ public final class Match {
             "rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2",
     };
 
+    // 25 more openings, written as moves from the start position.
+    private static final String[] MORE_OPENINGS = {
+            "e2e4 e7e5 g1f3 b8c6 f1b5",
+            "e2e4 e7e5 g1f3 b8c6 f1c4 f8c5",
+            "e2e4 c7c5 g1f3 d7d6 d2d4",
+            "e2e4 c7c5 b1c3 b8c6 g2g3",
+            "e2e4 e7e6 d2d4 d7d5 b1c3",
+            "e2e4 c7c6 d2d4 d7d5 e4e5",
+            "e2e4 d7d5 e4d5 d8d5 b1c3",
+            "e2e4 d7d6 d2d4 g8f6 b1c3",
+            "e2e4 g8f6 e4e5 f6d5 d2d4",
+            "d2d4 d7d5 c2c4 e7e6 b1c3",
+            "d2d4 d7d5 c2c4 c7c6 g1f3",
+            "d2d4 d7d5 c2c4 d5c4 g1f3",
+            "d2d4 g8f6 c2c4 g7g6 b1c3 f8g7",
+            "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4",
+            "d2d4 g8f6 c2c4 e7e6 g1f3 b7b6",
+            "d2d4 g8f6 c2c4 c7c5 d4d5",
+            "d2d4 f7f5 g2g3 g8f6 f1g2",
+            "d2d4 g8f6 g1f3 e7e6 c1g5",
+            "c2c4 e7e5 b1c3 g8f6 g2g3",
+            "c2c4 c7c5 g1f3 g8f6 b1c3",
+            "g1f3 d7d5 g2g3 g8f6 f1g2",
+            "g1f3 g8f6 c2c4 g7g6 g2g3",
+            "b2b3 e7e5 c1b2 b8c6 e2e3",
+            "f2f4 d7d5 g1f3 g8f6 e2e3",
+            "e2e4 e7e5 f2f4 e5f4 g1f3",
+    };
+
+    /** All openings as FEN strings. */
+    static final String[] ALL_OPENINGS = allOpenings();
+
+    private static String[] allOpenings() {
+        String[] all = java.util.Arrays.copyOf(OPENINGS, OPENINGS.length + MORE_OPENINGS.length);
+        for (int i = 0; i < MORE_OPENINGS.length; i++) {
+            Game game = new Game();
+            for (String move : MORE_OPENINGS[i].split(" ")) {
+                if (!game.play(move)) {
+                    throw new IllegalStateException("bad opening move " + move + " in " + MORE_OPENINGS[i]);
+                }
+            }
+            all[OPENINGS.length + i] = game.board().toFen();
+        }
+        return all;
+    }
+
     private static final int MAX_PLIES = 300;
 
     private Match() {

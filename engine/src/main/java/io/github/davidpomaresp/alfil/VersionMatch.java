@@ -92,7 +92,7 @@ public final class VersionMatch {
 
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         List<Future<Double>> results = new ArrayList<>();
-        for (String opening : Match.OPENINGS) {
+        for (String opening : Match.ALL_OPENINGS) {
             results.add(pool.submit(() -> playGame(opening, a, b, true, millis)));
             results.add(pool.submit(() -> playGame(opening, a, b, false, millis)));
         }
