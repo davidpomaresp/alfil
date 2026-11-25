@@ -65,6 +65,14 @@ public final class Search {
         this.moveOrdering = enabled;
     }
 
+    /** True if no capture changes the static evaluation (quiescence score equals it). */
+    public boolean isQuiet() {
+        nodes = 1;
+        stopped = false;
+        deadline = Long.MAX_VALUE;
+        return quiescence(-INFINITY, INFINITY, 0) == evaluator.score(board);
+    }
+
     /** Asks a running search to stop as soon as possible (e.g. from another thread). */
     public void stop() {
         stopRequested = true;

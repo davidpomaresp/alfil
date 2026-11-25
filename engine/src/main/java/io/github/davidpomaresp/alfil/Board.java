@@ -21,11 +21,12 @@ public final class Board {
     final int[] kingSquare = {Square.NONE, Square.NONE};
 
     private static final int MAX_PLY = 1024;
-    private final int[] undoCaptured = new int[MAX_PLY];
-    private final int[] undoCastling = new int[MAX_PLY];
-    private final int[] undoEnPassant = new int[MAX_PLY];
-    private final int[] undoHalfmove = new int[MAX_PLY];
-    private final long[] hashHistory = new long[MAX_PLY];
+    // Allocated on the first move, so a board that is only looked at (e.g. by the tuner) stays small.
+    private int[] undoCaptured;
+    private int[] undoCastling;
+    private int[] undoEnPassant;
+    private int[] undoHalfmove;
+    private long[] hashHistory = new long[0];
     private int ply;
     long hash;
 
@@ -208,6 +209,7 @@ public final class Board {
         int us = sideToMove;
         int piece = squares[from];
 
+        ensureHistory();
         undoCastling[ply] = castlingRights;
         undoEnPassant[ply] = enPassantSquare;
         undoHalfmove[ply] = halfmoveClock;
@@ -270,6 +272,7 @@ public final class Board {
 
     /** Passes the turn without moving. Only used by the search (null-move pruning). */
     public void makeNullMove() {
+        ensureHistory();
         undoCaptured[ply] = Piece.EMPTY;
         undoCastling[ply] = castlingRights;
         undoEnPassant[ply] = enPassantSquare;
@@ -303,6 +306,16 @@ public final class Board {
             }
         }
         return false;
+    }
+
+    private void ensureHistory() {
+        if (undoCaptured == null) {
+            undoCaptured = new int[MAX_PLY];
+            undoCastling = new int[MAX_PLY];
+            undoEnPassant = new int[MAX_PLY];
+            undoHalfmove = new int[MAX_PLY];
+            hashHistory = new long[MAX_PLY];
+        }
     }
 
     public void unmakeMove(int move) {
