@@ -89,32 +89,58 @@ public final class VersionMatch {
         Engine b = new Engine(args[1]);
         long millis = args.length > 2 ? Long.parseLong(args[2]) : 100;
         int threads = args.length > 3 ? Integer.parseInt(args[3]) : 1;
+        boolean sprt = args.length > 4 && args[4].equals("--sprt");
 
         ExecutorService pool = Executors.newFixedThreadPool(threads);
+        int[] wdl = new int[3];
+        if (!sprt) {
+            playRound(pool, a, b, millis, wdl);
+        } else {
+            // Sequential test: keep playing rounds of 100 games until the evidence is clear.
+            double elo0 = Double.parseDouble(args[5]);
+            double elo1 = Double.parseDouble(args[6]);
+            int maxGames = Integer.parseInt(args[7]);
+            double lower = Math.log(0.05 / 0.95);
+            double upper = Math.log(0.95 / 0.05);
+            while (true) {
+                playRound(pool, a, b, millis, wdl);
+                double llr = Sprt.llr(wdl[0], wdl[1], wdl[2], elo0, elo1);
+                int games = wdl[0] + wdl[1] + wdl[2];
+                System.out.printf("%d games: +%d =%d -%d  LLR %.2f [%.2f, %.2f]%n",
+                        games, wdl[0], wdl[1], wdl[2], llr, lower, upper);
+                if (llr >= upper) {
+                    System.out.printf("H1 accepted: the change is better (elo0=%.0f, elo1=%.0f)%n", elo0, elo1);
+                    break;
+                }
+                if (llr <= lower) {
+                    System.out.printf("H0 accepted: not shown to be better (elo0=%.0f, elo1=%.0f)%n", elo0, elo1);
+                    break;
+                }
+                if (games >= maxGames) {
+                    System.out.println("Inconclusive: game limit reached");
+                    break;
+                }
+            }
+        }
+        pool.shutdown();
+
+        int games = wdl[0] + wdl[1] + wdl[2];
+        double score = (wdl[0] + 0.5 * wdl[1]) / games;
+        System.out.printf("%s vs %s, %d ms per move, %d games%n", a.name, b.name, millis, games);
+        System.out.printf("+%d =%d -%d  score %.1f%%%n", wdl[0], wdl[1], wdl[2], score * 100);
+        System.out.printf("Elo %+.0f +/- %.0f (95%%)%n", Match.elo(score), Match.eloMargin(wdl[0], wdl[1], wdl[2]));
+    }
+
+    /** Plays every opening once with each colour and adds the results to {@code wdl}. */
+    private static void playRound(ExecutorService pool, Engine a, Engine b, long millis, int[] wdl) throws Exception {
         List<Future<Double>> results = new ArrayList<>();
         for (String opening : Match.ALL_OPENINGS) {
             results.add(pool.submit(() -> playGame(opening, a, b, true, millis)));
             results.add(pool.submit(() -> playGame(opening, a, b, false, millis)));
         }
-        int wins = 0;
-        int draws = 0;
-        int losses = 0;
         for (Future<Double> f : results) {
             double r = f.get();
-            if (r == 1.0) {
-                wins++;
-            } else if (r == 0.5) {
-                draws++;
-            } else {
-                losses++;
-            }
+            wdl[r == 1.0 ? 0 : r == 0.5 ? 1 : 2]++;
         }
-        pool.shutdown();
-
-        int games = wins + draws + losses;
-        double score = (wins + 0.5 * draws) / games;
-        System.out.printf("%s vs %s, %d ms per move, %d games%n", a.name, b.name, millis, games);
-        System.out.printf("+%d =%d -%d  score %.1f%%%n", wins, draws, losses, score * 100);
-        System.out.printf("Elo %+.0f +/- %.0f (95%%)%n", Match.elo(score), Match.eloMargin(wins, draws, losses));
     }
 }
