@@ -2,7 +2,7 @@
 
 Motor de ajedrez escrito en Java desde cero.
 
-**[Juega contra el motor en tu navegador](https://davidpomaresp.github.io/ajedrez/)**: eliges color
+**[Juega contra el motor en tu navegador](https://davidpomaresp.github.io/alfil/)**: eliges color
 y juegas una partida completa. El motor se ejecuta en tu propio navegador, sin servidor.
 
 ## Cómo ejecutar las pruebas
