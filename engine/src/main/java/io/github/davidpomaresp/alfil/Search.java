@@ -105,7 +105,7 @@ public final class Search {
 
         SearchResult best = new SearchResult(rootMoves.get(0), 0, 0, 0, 0, new int[] {rootMoves.get(0)});
         for (int depth = 1; depth <= maxDepth; depth++) {
-            int score = negamax(depth, -INFINITY, INFINITY, 0, true);
+            int score = aspirationSearch(depth, best.score());
             if (stopped && depth > 1) {
                 break;
             }
@@ -128,6 +128,38 @@ public final class Search {
         }
         return new SearchResult(best.bestMove(), best.score(), best.depth(), nodes,
                 System.currentTimeMillis() - startTime, best.pv());
+    }
+
+    /**
+     * Aspiration windows: the score rarely changes much from one depth to the next, so
+     * search with a narrow window around the last one (more cutoffs) and widen it only
+     * if the real score falls outside.
+     */
+    private int aspirationSearch(int depth, int previous) {
+        if (depth < 4 || Math.abs(previous) >= MATE - MAX_PLY) {
+            return negamax(depth, -INFINITY, INFINITY, 0, true);
+        }
+        int delta = 25;
+        int alpha = previous - delta;
+        int beta = previous + delta;
+        while (true) {
+            int score = negamax(depth, alpha, beta, 0, true);
+            if (stopped) {
+                return score;
+            }
+            if (score <= alpha) {
+                alpha = Math.max(-INFINITY, alpha - delta);
+            } else if (score >= beta) {
+                beta = Math.min(INFINITY, beta + delta);
+            } else {
+                return score;
+            }
+            delta *= 2;
+            if (delta > 1000) {
+                alpha = -INFINITY;
+                beta = INFINITY;
+            }
+        }
     }
 
     private int negamax(int depth, int alpha, int beta, int ply, boolean allowNull) {
