@@ -8,7 +8,7 @@ Ahora mismo juega a unos 2.300 Elo contra otros motores. Lo calculé enfrentánd
 
 ## Qué hace
 
-- Genera todas las jugadas legales, incluidos el enroque, la captura al paso y las promociones. Lo compruebo con perft contra posiciones de referencia publicadas.
+- Genera todas las jugadas legales, incluidos el enroque, la captura al paso y las promociones. 
 - Busca con alfa-beta y profundización iterativa. Encima lleva lo habitual en un motor: tabla de transposición, búsqueda de quietud, movimiento nulo, LMR, ventanas de aspiración...
 - Evalúa las posiciones con material, la casilla de cada pieza, la estructura de peones, la movilidad y la seguridad del rey.
 - Habla UCI, así que puedes usarlo en Arena, Cute Chess o cualquier interfaz de ajedrez.
@@ -19,22 +19,7 @@ Cada cambio lo pruebo antes de quedármelo. Comparo nodos a la misma profundidad
 
 Los resultados están en [docs/experimentos](docs/experimentos).
 
-## Probarlo
 
-Necesitas Java 21 y Maven.
-
-```bash
-mvn test                              # pruebas
-mvn -pl engine package -DskipTests    # genera engine/target/alfil.jar
-java -jar engine/target/alfil.jar     # motor UCI por consola
-```
-
-Para ver la web en local:
-
-```bash
-mvn install
-cd web/target/site && python3 -m http.server 8000
-```
 
 ## Cómo está organizado
 
