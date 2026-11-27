@@ -1,73 +1,47 @@
 # Alfil
 
-Motor de ajedrez escrito en Java desde cero.
+Un motor de ajedrez que estoy haciendo en Java desde cero.
 
-**[Juega contra el motor en tu navegador](https://davidpomaresp.github.io/alfil/)**: eliges color
-y juegas una partida completa. El motor se ejecuta en tu propio navegador, sin servidor.
+**[Juega contra él en el navegador](https://davidpomaresp.github.io/alfil/)**. Eliges color y juegas. No hay servidor: el motor corre en tu propio navegador.
 
-## Cómo ejecutar las pruebas
+Ahora mismo juega a unos 2.300 Elo contra otros motores. Lo calculé enfrentándolo a Stockfish con la fuerza limitada, así que tómalo como una aproximación. No es su Elo contra personas.
+
+## Qué hace
+
+- Genera todas las jugadas legales, incluidos el enroque, la captura al paso y las promociones. Lo compruebo con perft contra posiciones de referencia publicadas.
+- Busca con alfa-beta y profundización iterativa. Encima lleva lo habitual en un motor: tabla de transposición, búsqueda de quietud, movimiento nulo, LMR, ventanas de aspiración...
+- Evalúa las posiciones con material, la casilla de cada pieza, la estructura de peones, la movilidad y la seguridad del rey.
+- Habla UCI, así que puedes usarlo en Arena, Cute Chess o cualquier interfaz de ajedrez.
+
+## Cómo lo mido
+
+Cada cambio lo pruebo antes de quedármelo. Comparo nodos a la misma profundidad y juego partidas contra la versión anterior, con las mismas aperturas y alternando colores. Desde hace poco uso un SPRT para decidir cuándo hay suficientes partidas. Algunas ideas no funcionaron, como ajustar la evaluación con Texel tuning, y también lo dejo apuntado.
+
+Los resultados están en [docs/experimentos](docs/experimentos).
+
+## Probarlo
 
 Necesitas Java 21 y Maven.
 
 ```bash
-mvn test
+mvn test                              # pruebas
+mvn -pl engine package -DskipTests    # genera engine/target/alfil.jar
+java -jar engine/target/alfil.jar     # motor UCI por consola
 ```
 
-Para contar nodos con perft desde la línea de comandos (profundidad y FEN opcional):
-
-```bash
-mvn -q compile
-java -cp engine/target/classes io.github.davidpomaresp.alfil.Perft 5
-```
-
-## Representación del tablero
-
-Las casillas van de 0 a 63, empezando en a1 y avanzando por filas
-(a1 = 0, h1 = 7, a8 = 56, h8 = 63). Cada casilla guarda un número
-pequeño: los 3 bits bajos indican el tipo de pieza y el cuarto bit el color.
-
-## Cómo está hecho
-
-El proyecto tiene dos módulos de Maven:
-
-- `engine`: el motor en Java puro (tablero, jugadas, evaluación y búsqueda), con sus pruebas.
-- `web`: la página. TeaVM compila el mismo código del motor a JavaScript, y la
-  búsqueda corre en un Web Worker para que el tablero no se congele mientras piensa.
-  El tablero se dibuja con [cm-chessboard](https://github.com/shaack/cm-chessboard).
-
-Para probar la página en local:
+Para ver la web en local:
 
 ```bash
 mvn install
 cd web/target/site && python3 -m http.server 8000
-# abre http://localhost:8000
 ```
 
-## Generación de jugadas
+## Cómo está organizado
 
-Primero se generan las jugadas pseudolegales (cada pieza según sus reglas) y
-después se descartan las que dejan al propio rey en jaque: se hace la jugada,
-se mira si el rey está atacado y se deshace. Es más lento que generar solo
-jugadas legales, pero mucho más difícil de equivocarse.
+- `engine`: el motor en Java puro, con sus pruebas.
+- `web`: la página. [TeaVM](https://teavm.org) compila el mismo código del motor a JavaScript, y la búsqueda va en un Web Worker para que el tablero no se congele. El tablero lo dibuja [cm-chessboard](https://github.com/shaack/cm-chessboard).
 
-La generación se comprueba con perft contra los valores publicados de seis
-posiciones de referencia y catorce posiciones que prueban una regla concreta
-(al paso ilegal por clavada, enroque con jaque, promociones, ahogado...).
-Desde la posición inicial, perft(6) = 119.060.324 nodos en unos 9 segundos.
+## Lo próximo
 
-## Búsqueda y evaluación
-
-- Negamax con poda alfa-beta y profundización iterativa: busca a profundidad 1, 2, 3...
-  hasta que se acaba el tiempo y juega la mejor jugada de la última profundidad completa.
-- Búsqueda de quietud: al llegar al final sigue mirando capturas, para no evaluar a mitad
-  de un cambio de piezas.
-- Evaluación: material, un bonus según la casilla de cada pieza (distinto en medio juego
-  y en final) y la pareja de alfiles.
-- Mate, ahogado, triple repetición, regla de las 50 jugadas y material insuficiente.
-
-`Bench` busca 8 posiciones fijas a una profundidad fija y da nodos y tiempo; sirve para
-medir cada cambio:
-
-```bash
-java -cp engine/target/classes io.github.davidpomaresp.alfil.Bench 4
-```
+- Ponerlo como bot en Lichess para saber su Elo de verdad contra personas.
+- Cambiar el tablero a bitboards para que vaya más rápido.
