@@ -74,4 +74,20 @@ class SearchTest {
         assertEquals(Move.NONE, result.bestMove());
         assertEquals(-Search.MATE, result.score());
     }
+
+    @Test
+    void quiescenceSeesMateAfterACapture() {
+        // Rxa8 is a capture and also mate on the back rank.
+        Search search = new Search(Board.fromFen("r5k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1"));
+        assertTrue(search.quiescenceScore() >= Search.MATE - Search.MAX_PLY);
+        Search mated = new Search(Board.fromFen("R5k1/5ppp/8/8/8/8/8/6K1 b - - 0 1"));
+        assertEquals(-Search.MATE, mated.quiescenceScore());
+    }
+
+    @Test
+    void quiescenceSearchesQuietEvasions() {
+        // Black is in check and can only escape with a quiet king move: it must not mate itself.
+        Search search = new Search(Board.fromFen("R5k1/8/8/8/8/8/8/6K1 b - - 0 1"));
+        assertTrue(Math.abs(search.quiescenceScore()) < Search.MATE - Search.MAX_PLY);
+    }
 }

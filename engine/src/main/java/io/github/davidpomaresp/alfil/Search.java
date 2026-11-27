@@ -74,6 +74,14 @@ public final class Search {
         return quiescence(-INFINITY, INFINITY, 0) == evaluator.score(board);
     }
 
+    /** Score of the quiescence search alone from the current position (for tests). */
+    int quiescenceScore() {
+        nodes = 1;
+        stopped = false;
+        deadline = Long.MAX_VALUE;
+        return quiescence(-INFINITY, INFINITY, 0);
+    }
+
     /** Asks a running search to stop as soon as possible (e.g. from another thread). */
     public void stop() {
         stopRequested = true;
@@ -86,7 +94,6 @@ public final class Search {
     public SearchResult search(int maxDepth, long millis) {
         nodes = 0;
         stopped = false;
-        stopRequested = false;
         startTime = System.currentTimeMillis();
         deadline = millis > 0 ? startTime + millis : Long.MAX_VALUE;
         maxDepth = Math.min(Math.max(maxDepth, 1), MAX_PLY - 1);
@@ -304,6 +311,9 @@ public final class Search {
         if (shouldStop()) {
             return 0;
         }
+        if (board.inCheck() && ply < MAX_PLY) {
+            return evasions(alpha, beta, ply);
+        }
         int standPat = evaluator.score(board);
         if (ply >= MAX_PLY || standPat >= beta) {
             return standPat;
@@ -333,6 +343,44 @@ public final class Search {
                 board.unmakeMove(move);
                 continue;
             }
+            int score = -quiescence(-beta, -alpha, ply + 1);
+            board.unmakeMove(move);
+            if (stopped) {
+                return 0;
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                if (score > alpha) {
+                    alpha = score;
+                    if (alpha >= beta) {
+                        break;
+                    }
+                }
+            }
+        }
+        return bestScore;
+    }
+
+    /**
+     * In check there is no "stand pat": the side to move has to get out of check,
+     * so every legal move is searched, quiet ones too, and no moves means mate.
+     */
+    private int evasions(int alpha, int beta, int ply) {
+        MoveList moves = moveLists[ply];
+        MoveGenerator.generateLegal(board, moves);
+        if (moves.size() == 0) {
+            return -MATE + ply;
+        }
+        int[] scores = moveScores[ply];
+        for (int i = 0; i < moves.size(); i++) {
+            int move = moves.get(i);
+            scores[i] = Move.isCapture(move) ? captureScore(move) : -1_000_000;
+        }
+        int bestScore = -INFINITY;
+        for (int i = 0; i < moves.size(); i++) {
+            pickBest(moves, scores, i);
+            int move = moves.get(i);
+            board.makeMove(move);
             int score = -quiescence(-beta, -alpha, ply + 1);
             board.unmakeMove(move);
             if (stopped) {

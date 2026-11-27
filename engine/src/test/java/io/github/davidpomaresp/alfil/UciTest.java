@@ -8,7 +8,9 @@ import java.io.PrintStream;
 import java.io.StringReader;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 class UciTest {
 
@@ -72,6 +74,19 @@ class UciTest {
         Thread.sleep(200);
         uci.handle("stop");
         assertTrue(bytes.toString().contains("bestmove"));
+    }
+
+    @Test
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    void stopRightAfterGoIsNotLost() throws Exception {
+        for (int i = 0; i < 20; i++) {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            Uci uci = new Uci(new BufferedReader(new StringReader("")), new PrintStream(bytes, true));
+            uci.handle("position startpos");
+            uci.handle("go infinite");
+            uci.handle("stop");
+            assertTrue(bytes.toString().contains("bestmove"));
+        }
     }
 
     @Test
