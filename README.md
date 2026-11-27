@@ -5,43 +5,12 @@ Motor de ajedrez escrito en Java desde cero.
 **[Juega contra el motor en tu navegador](https://davidpomaresp.github.io/alfil/)**: eliges color
 y juegas una partida completa. El motor se ejecuta en tu propio navegador, sin servidor.
 
-## Cómo ejecutar las pruebas
-
-Necesitas Java 21 y Maven.
-
-```bash
-mvn test
-```
-
-Para contar nodos con perft desde la línea de comandos (profundidad y FEN opcional):
-
-```bash
-mvn -q compile
-java -cp engine/target/classes io.github.davidpomaresp.alfil.Perft 5
-```
-
 ## Representación del tablero
 
 Las casillas van de 0 a 63, empezando en a1 y avanzando por filas
 (a1 = 0, h1 = 7, a8 = 56, h8 = 63). Cada casilla guarda un número
 pequeño: los 3 bits bajos indican el tipo de pieza y el cuarto bit el color.
 
-## Cómo está hecho
-
-El proyecto tiene dos módulos de Maven:
-
-- `engine`: el motor en Java puro (tablero, jugadas, evaluación y búsqueda), con sus pruebas.
-- `web`: la página. TeaVM compila el mismo código del motor a JavaScript, y la
-  búsqueda corre en un Web Worker para que el tablero no se congele mientras piensa.
-  El tablero se dibuja con [cm-chessboard](https://github.com/shaack/cm-chessboard).
-
-Para probar la página en local:
-
-```bash
-mvn install
-cd web/target/site && python3 -m http.server 8000
-# abre http://localhost:8000
-```
 
 ## Generación de jugadas
 
