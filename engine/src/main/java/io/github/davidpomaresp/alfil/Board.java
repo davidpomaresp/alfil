@@ -256,7 +256,8 @@ public final class Board {
             kingSquare[us] = to;
         }
 
-        enPassantSquare = flags == Move.DOUBLE_PAWN_PUSH ? (from + to) / 2 : Square.NONE;
+        enPassantSquare = flags == Move.DOUBLE_PAWN_PUSH && canCaptureEnPassant(to, us ^ 1)
+                ? (from + to) / 2 : Square.NONE;
         castlingRights &= CASTLING_MASK[from] & CASTLING_MASK[to];
         h ^= Zobrist.CASTLING[castlingRights];
         if (enPassantSquare != Square.NONE) {
@@ -268,6 +269,17 @@ public final class Board {
             fullmoveNumber++;
         }
         sideToMove = us ^ 1;
+    }
+
+    /**
+     * Whether a pawn of {@code capturer} stands next to the pawn that just moved two
+     * squares. If none does, the en passant square is left out, so that the position
+     * (and its hash) is the same as when it is reached any other way.
+     */
+    boolean canCaptureEnPassant(int pawnSquare, int capturer) {
+        int pawn = Piece.of(capturer, Piece.PAWN);
+        int file = Square.file(pawnSquare);
+        return (file > 0 && squares[pawnSquare - 1] == pawn) || (file < 7 && squares[pawnSquare + 1] == pawn);
     }
 
     /** Passes the turn without moving. Only used by the search (null-move pruning). */

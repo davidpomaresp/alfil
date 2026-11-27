@@ -23,6 +23,12 @@ public final class Fen {
         board.halfmoveClock = fields.length > 4 ? parseNumber(fields[4], 0) : 0;
         board.fullmoveNumber = fields.length > 5 ? parseNumber(fields[5], 1) : 1;
         findKings(board);
+        if (board.enPassantSquare != Square.NONE) {
+            int pawnSquare = board.enPassantSquare + (board.sideToMove == Piece.WHITE ? -8 : 8);
+            if (!board.canCaptureEnPassant(pawnSquare, board.sideToMove)) {
+                board.enPassantSquare = Square.NONE;
+            }
+        }
         board.hash = Zobrist.hash(board);
         return board;
     }

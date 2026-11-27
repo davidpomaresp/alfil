@@ -37,6 +37,29 @@ class GameTest {
     }
 
     @Test
+    void repetitionAfterADoublePawnPush() {
+        // Nobody can take e4 en passant, so the position after 1.e4 counts from the start.
+        Game game = new Game();
+        game.play("e2e4");
+        String[] shuffle = {"g8f6", "g1f3", "f6g8", "f3g1"};
+        for (int round = 0; round < 2; round++) {
+            for (String move : shuffle) {
+                assertEquals(Status.PLAYING, game.status());
+                game.play(move);
+            }
+        }
+        assertEquals(Status.DRAW_BY_REPETITION, game.status());
+    }
+
+    @Test
+    void enPassantSquareOnlyWhenACaptureIsPossible() {
+        assertEquals(Square.NONE, Board.fromFen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1").enPassantSquare());
+        Game game = new Game("rnbqkbnr/ppp1pppp/8/8/3p4/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        game.play("e2e4");
+        assertEquals(Square.parse("e3"), game.board().enPassantSquare());
+    }
+
+    @Test
     void threefoldRepetition() {
         Game game = new Game();
         String[] shuffle = {"g1f3", "g8f6", "f3g1", "f6g8"};

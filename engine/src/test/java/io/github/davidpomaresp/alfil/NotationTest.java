@@ -11,7 +11,7 @@ class NotationTest {
     @CsvSource(delimiter = ';', value = {
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1; e2e4; e4",
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1; g1f3; Nf3",
-            "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2; e4d5; exd5",
+            "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2; e4d5; exd5",
             "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1; e1g1; O-O",
             "r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1; e8c8; O-O-O",
             "4k3/1P6/8/8/8/8/8/4K3 w - - 0 1; b7b8q; b8=Q+",
