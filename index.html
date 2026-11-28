@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Alfil · juega contra mi motor de ajedrez</title>
+    <meta name="description" content="Juega una partida contra Alfil, un motor de ajedrez escrito en Java que se ejecuta en tu navegador.">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cm-chessboard@8.15.4/assets/chessboard.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cm-chessboard@8.15.4/assets/extensions/markers/markers.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cm-chessboard@8.15.4/assets/extensions/promotion-dialog/promotion-dialog.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main>
+    <header>
+        <h1>Alfil</h1>
+        <p>Un motor de ajedrez que escribí en Java. Aquí se ejecuta dentro de tu navegador.</p>
+    </header>
+
+    <section class="game">
+        <div class="board-wrap">
+            <div id="board"></div>
+        </div>
+
+        <aside class="panel">
+            <div class="controls">
+                <label>Juegas con
+                    <select id="color">
+                        <option value="w">blancas</option>
+                        <option value="b">negras</option>
+                        <option value="r">al azar</option>
+                    </select>
+                </label>
+                <label>Tiempo del motor
+                    <select id="time">
+                        <option value="1000">1 s por jugada</option>
+                        <option value="3000" selected>3 s por jugada</option>
+                        <option value="6000">6 s por jugada</option>
+                    </select>
+                </label>
+                <div class="buttons">
+                    <button id="new-game" type="button">Nueva partida</button>
+                    <button id="undo" type="button" class="secondary">Deshacer</button>
+                </div>
+            </div>
+
+            <p id="status" class="status" role="status">Cargando el motor…</p>
+            <p id="info" class="info"></p>
+
+            <ol id="moves" class="moves"></ol>
+        </aside>
+    </section>
+
+    <footer>
+        <a href="https://github.com/davidpomaresp/alfil">Código en GitHub</a>
+    </footer>
+</main>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
